@@ -1,4 +1,5 @@
-var hMono = Process.getModuleByName("mono-2.0-bdwgc.dll") //Hook the mono module
+//frida -U "Tap Titans" -l exploit.ts
+var hMono = Process.getModuleByName("libmono.so")
 
 //Domain Stuffs
 var mono_get_root_domain = new NativeFunction(hMono.getExportByName("mono_get_root_domain"), 'pointer', [])
@@ -14,6 +15,8 @@ var mono_image_get_name  = new NativeFunction(hMono.getExportByName("mono_image_
 //Class stuff
 var mono_class_from_name = new NativeFunction(hMono.getExportByName("mono_class_from_name"), 'pointer', ['pointer', 'pointer', 'pointer'])
 var mono_class_get_method_from_name  = new NativeFunction(hMono.getExportByName("mono_class_get_method_from_name"), 'pointer', ['pointer', 'pointer', 'int'])
+var mono_class_get_property_from_name = new NativeFunction(hMono.getExportByName("mono_class_get_property_from_name"), 'pointer', ['pointer', 'pointer'])
+var mono_class_vtable = new NativeFunction(hMono.getExportByName("mono_class_vtable"), 'pointer', ['pointer', 'pointer'])
 
 //Var Method Stuff
 var mono_compile_method = new NativeFunction(hMono.getExportByName("mono_compile_method"), 'pointer', ['pointer'])
@@ -21,10 +24,21 @@ var mono_compile_method = new NativeFunction(hMono.getExportByName("mono_compile
 //Field Stuff
 var mono_class_get_field_from_name = new NativeFunction(hMono.getExportByName("mono_class_get_field_from_name"), 'pointer', ['pointer', 'pointer'])
 var mono_field_get_offset = new NativeFunction(hMono.getExportByName("mono_field_get_offset"), 'int', ['pointer'])
+var mono_field_static_get_value  = new NativeFunction(hMono.getExportByName("mono_field_static_get_value"), 'void', ['pointer', 'pointer', 'pointer'])
 
-//Main Script
+//Property stuff
+var mono_property_get_value  = new NativeFunction(hMono.getExportByName("mono_property_get_value"), 'pointer', ['pointer', 'pointer', 'pointer', 'pointer'])
 
-// Attach thread to root domain. This is needed for the mono_compile_method. I spent hours figuring this out.
+//Main Exploit
+
+function Vector3(x,y,z){
+    var Vector3pointer = Memory.alloc(12)
+    Vector3pointer.add(0).writeFloat(x)
+    Vector3pointer.add(4).writeFloat(y)
+    Vector3pointer.add(8).writeFloat(z)
+    return Vector3pointer
+}
+
 mono_thread_attach(mono_get_root_domain())
 
 var AssemblyCsharpAssembly
@@ -40,10 +54,14 @@ function GetAssemblyCsharpCallback(MonoAssemblyObject, user_data){
 //Fetch the assemblycsharp.dll image
 mono_assembly_foreach(new NativeCallback(GetAssemblyCsharpCallback, 'void', ['pointer', 'pointer']), ptr(0))
 
-//Get the NewMovement Class. To use const char*, we need to allocate first using allocUtf8String and it will return a pointer to our string
-var NewMovementClass = mono_class_from_name(ptr(AssemblyCsharpAssembly), Memory.allocUtf8String(""), Memory.allocUtf8String("NewMovement"))
+var PlayerControllerClass = mono_class_from_name(ptr(AssemblyCsharpAssembly), Memory.allocUtf8String(""), Memory.allocUtf8String("PlayerController"))
 
-//Get Update Method address and hook it
-var NewMovementUpdateMethod = mono_class_get_method_from_name(NewMovementClass, Memory.allocUtf8String("Update"), 0)
-var NewMovement_Update = mono_compile_method(NewMovementUpdateMethod)
+var instanceProperty = mono_class_get_property_from_name(PlayerControllerClass, Memory.allocUtf8String("instance"))
+var instanceObject = mono_property_get_value(instanceProperty, ptr(0), ptr(0), ptr(0))
 
+var Ret = Memory.alloc(4)
+mono_field_static_get_value(mono_class_vtable(mono_get_root_domain(), PlayerControllerClass), mono_class_get_field_from_name(PlayerControllerClass, Memory.allocUtf8String("sharedInstance")), Ret)
+var LocalPlayer = Ret.readPointer()
+
+var DoTapAttack = new NativeFunction(mono_compile_method(mono_class_get_method_from_name(PlayerControllerClass, Memory.allocUtf8String("DoTapAttack"), 1)), 'void', ['pointer', 'pointer'])
+DoTapAttack(LocalPlayer, Vector3(0,0,0))
