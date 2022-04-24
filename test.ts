@@ -18,6 +18,10 @@ var mono_class_get_method_from_name  = new NativeFunction(hMono.getExportByName(
 //Var Method Stuff
 var mono_compile_method = new NativeFunction(hMono.getExportByName("mono_compile_method"), 'pointer', ['pointer'])
 
+//Field Stuff
+var mono_class_get_field_from_name = new NativeFunction(hMono.getExportByName("mono_class_get_field_from_name"), 'pointer', ['pointer', 'pointer'])
+var mono_field_get_offset = new NativeFunction(hMono.getExportByName("mono_field_get_offset"), 'int', ['pointer'])
+
 //Main Script
 
 // Attach thread to root domain. This is needed for the mono_compile_method. I spent hours figuring this out.
